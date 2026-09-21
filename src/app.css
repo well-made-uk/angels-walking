@@ -1,0 +1,244 @@
+/* Design tokens: a walking-map palette. Soft mint paper, deep forest ink,
+   and the trail orange as the accent. The hero uses the same colours. */
+:root {
+	--bg: #f4f9f6;
+	--surface: #ffffff;
+	--surface-2: #eef6f1;
+	--text: #153d2e;
+	--muted: #5b7a6d;
+	--border: #d9eae1;
+	--border-strong: #b9d6c6;
+	--accent: #1d5b43;
+	--accent-strong: #153d2e;
+	--accent-contrast: #ffffff;
+	--accent-soft: #e3f1e9;
+	--trail: #e8590c;
+	--trail-strong: #c24a0a;
+	--trail-soft: #fdede3;
+	--warn: #b3261e;
+	--warn-soft: #fbe9e7;
+	--focus: #e8590c;
+	--radius: 16px;
+	--radius-sm: 10px;
+	--shadow: 0 1px 2px rgb(21 61 46 / 0.04), 0 6px 20px rgb(21 61 46 / 0.06);
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #0c1c16;
+		--surface: #132a21;
+		--surface-2: #183429;
+		--text: #eaf7f0;
+		--muted: #9fc2b2;
+		--border: #22443a;
+		--border-strong: #2f5c4c;
+		--accent: #6fd0a3;
+		--accent-strong: #8fe0ba;
+		--accent-contrast: #0c1c16;
+		--accent-soft: #1b3d31;
+		--trail: #ff8a4c;
+		--trail-strong: #ffa36f;
+		--trail-soft: #3a2519;
+		--warn: #ff9b8f;
+		--warn-soft: #3b1f1c;
+		--focus: #ff8a4c;
+		--shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+		color-scheme: dark;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family:
+		system-ui,
+		-apple-system,
+		'Segoe UI',
+		Roboto,
+		sans-serif;
+	font-size: 1.0625rem;
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+	line-height: 1.2;
+	margin: 0;
+	letter-spacing: -0.015em;
+	text-wrap: balance;
+}
+
+a {
+	color: var(--accent);
+	text-underline-offset: 0.18em;
+	text-decoration-thickness: 1px;
+}
+
+a:hover {
+	color: var(--accent-strong);
+}
+
+:focus-visible {
+	outline: 2.5px solid var(--focus);
+	outline-offset: 2px;
+}
+
+input,
+select,
+textarea,
+button {
+	font: inherit;
+	color: inherit;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='number'],
+input[type='date'],
+input[type='time'],
+select,
+textarea {
+	width: 100%;
+	padding: 0.7rem 0.9rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+	background: var(--surface);
+	min-height: 48px;
+	transition:
+		border-color 0.15s,
+		box-shadow 0.15s;
+}
+
+input[type='text']:focus,
+input[type='email']:focus,
+input[type='password']:focus,
+input[type='number']:focus,
+input[type='date']:focus,
+input[type='time']:focus,
+select:focus,
+textarea:focus {
+	border-color: var(--accent);
+	outline: none;
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+::placeholder {
+	color: var(--muted);
+	opacity: 0.8;
+}
+
+label {
+	display: block;
+	font-weight: 600;
+	font-size: 0.95rem;
+	margin-bottom: 0.35rem;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	min-height: 48px;
+	padding: 0.6rem 1.3rem;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	font-weight: 600;
+	letter-spacing: 0.005em;
+	cursor: pointer;
+	white-space: nowrap;
+	transition:
+		background 0.15s,
+		border-color 0.15s,
+		color 0.15s,
+		transform 0.1s;
+}
+
+.btn:active:not(:disabled) {
+	transform: scale(0.98);
+}
+
+.btn:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: var(--accent-contrast);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--accent-strong);
+	color: var(--accent-contrast);
+}
+
+.btn-ghost {
+	background: var(--surface);
+	border-color: var(--border-strong);
+	color: var(--text);
+}
+
+.btn-ghost:hover:not(:disabled) {
+	border-color: var(--accent);
+	color: var(--accent-strong);
+}
+
+/* Small uppercase label used above headings and facts. */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	margin: 0;
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--trail);
+}
+
+.eyebrow::before {
+	content: '';
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.error {
+	color: var(--warn);
+	background: var(--warn-soft);
+	padding: 0.55rem 0.8rem;
+	border-radius: var(--radius-sm);
+	margin: 0.75rem 0 0;
+	font-weight: 500;
+}
+
+dialog::backdrop {
+	background: rgb(12 28 22 / 0.55);
+	backdrop-filter: blur(2px);
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
