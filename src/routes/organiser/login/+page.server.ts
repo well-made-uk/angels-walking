@@ -1,4 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { AppwriteException } from 'node-appwrite';
+import { currentOrganiser, sendOrganiserCode, setSession, verifyOrganiserCode } from '$lib/server/organiser';
 import type { Actions, PageServerLoad } from './$types';
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -12,40 +14,33 @@ const emailOf = (data: FormData) =>
 		.toLowerCase();
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const {
-		data: { user }
-	} = await locals.supabase.auth.getUser();
-	if (user) redirect(303, safeNext(url.searchParams.get('next')));
+	if (await currentOrganiser(locals)) redirect(303, safeNext(url.searchParams.get('next')));
 };
 
 // Organisers sign in with a one-time code emailed to them - no passwords, and
-// no sign-ups: this form can never create an account.
+// no sign-ups: only existing accounts labelled as organisers get a code.
 export const actions: Actions = {
-	sendCode: async ({ request, locals }) => {
+	sendCode: async ({ request }) => {
 		const email = emailOf(await request.formData());
 		if (!EMAIL.test(email)) return fail(400, { step: 'email', email, error: 'Please enter your email address.' });
 
-		const { error } = await locals.supabase.auth.signInWithOtp({
-			email,
-			options: { shouldCreateUser: false }
-		});
-
-		// An email with no account gets the same reply as a real one, so this
-		// form can't be used to find out who has an account.
-		const noSuchUser = error && (error.code === 'otp_disabled' || error.code === 'user_not_found' || error.status === 422);
-		if (error && !noSuchUser) {
+		try {
+			// Anyone who isn't an organiser gets the same reply as one who is, so
+			// this form can't be used to find out who has an account.
+			await sendOrganiserCode(email);
+		} catch (error) {
 			console.error(error);
-			const message =
-				error.status === 429
-					? 'Too many codes requested just now. Please wait a minute and try again.'
-					: 'We couldn’t send the email. Please try again shortly.';
-			return fail(error.status === 429 ? 429 : 500, { step: 'email', email, error: message });
+			const tooMany = error instanceof AppwriteException && error.code === 429;
+			const message = tooMany
+				? 'Too many codes requested just now. Please wait a minute and try again.'
+				: 'We couldn’t send the email. Please try again shortly.';
+			return fail(tooMany ? 429 : 500, { step: 'email', email, error: message });
 		}
 
 		return { step: 'code', email };
 	},
 
-	verify: async ({ request, locals, url }) => {
+	verify: async ({ request, cookies, url }) => {
 		const data = await request.formData();
 		const email = emailOf(data);
 		const code = String(data.get('code') ?? '').replace(/\s+/g, '');
@@ -54,18 +49,12 @@ export const actions: Actions = {
 			return fail(400, { step: 'code', email, error: 'Enter the code from the email - just the numbers.' });
 		}
 
-		const { error } = await locals.supabase.auth.verifyOtp({ email, token: code, type: 'email' });
-		if (error) {
+		const secret = await verifyOrganiserCode(email, code);
+		if (!secret) {
 			return fail(400, { step: 'code', email, error: 'That code didn’t work. It may have expired - codes only last a short while.' });
 		}
 
-		// Signed in - but only organisers may stay signed in here.
-		const { data: isOrganiser } = await locals.supabase.rpc('angels_is_organiser');
-		if (!isOrganiser) {
-			await locals.supabase.auth.signOut();
-			return fail(403, { step: 'email', email, error: 'That account isn’t set up as an organiser.' });
-		}
-
+		setSession(cookies, secret, url.protocol === 'https:');
 		redirect(303, safeNext(url.searchParams.get('next')));
 	}
 };

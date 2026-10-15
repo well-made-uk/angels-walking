@@ -48,7 +48,7 @@
 
 	<h2>Where it’s stored</h2>
 	<p>
-		In a database hosted by Supabase, in their London data centre. Your browser also remembers who you
+		In a database hosted by Appwrite, in their Frankfurt (Germany) data centre. Your browser also remembers who you
 		are, so you stay logged in on that device until you press “Log out”.
 	</p>
 

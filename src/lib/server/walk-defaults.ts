@@ -1,16 +1,12 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Walk, WalkFormValues } from '$lib/types';
+import { walkMonthsInUse } from '$lib/server/walks-db';
 import { defaultVoteDays, monthEnd, upcomingWalkMonths, voteDays } from '$lib/walks';
 
 /** Upcoming walk months, noting which already have a (non-cancelled) walk. */
-export async function walkMonthOptions(supabase: SupabaseClient, ignoreWalkId?: string) {
+export async function walkMonthOptions(ignoreWalkId?: string) {
 	const months = upcomingWalkMonths();
-	const { data } = await supabase
-		.from('angels_walks')
-		.select('id, walk_month')
-		.eq('cancelled', false)
-		.gte('walk_month', months[0]?.month ?? '1970-01-01');
-	const taken = new Set((data ?? []).filter((w) => w.id !== ignoreWalkId).map((w) => w.walk_month));
+	const used = await walkMonthsInUse(months[0]?.month ?? '1970-01-01');
+	const taken = new Set(used.filter((w) => w.id !== ignoreWalkId).map((w) => w.walk_month));
 	return months.map((m) => ({ ...m, taken: taken.has(m.month) }));
 }
 

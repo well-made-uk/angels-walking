@@ -21,8 +21,9 @@ export interface Walk {
 	max_people: number | null;
 	notes: string | null;
 	cancelled: boolean;
-	route_image_path: string | null;
-	route_image_url?: string | null;
+	route_image_id: string | null;
+	/** Where walkers and organisers load the route image from. */
+	route_image_url: string | null;
 	suggestion_id: string | null;
 	suggestion?: { suggested_by: string | null } | null;
 	signups: { id: string; name: string; created_at: string }[];
@@ -81,10 +82,6 @@ export interface DatePoll {
 	options: DateTally[];
 	voters: number;
 }
-
-/** Organiser pages (walkers get walks from the feed instead). */
-export const WALK_COLUMNS =
-	'id, title, description, starts_at, walk_date, walk_month, vote_options, vote_deadline, start_time, votes_close_at, meeting_point, distance_km, duration_mins, difficulty, max_people, notes, cancelled, route_image_path, route_image_url, suggestion_id, suggestion:angels_suggestions(suggested_by), signups:angels_signups(id, name, created_at)';
 
 /** Organiser walk form fields, as strings from the form. */
 export interface WalkFormValues {

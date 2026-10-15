@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
-import { supabase } from '$lib/server/supabase';
+import { UserError } from '$lib/server/walkers';
+import { addSuggestion, deleteOwnSuggestion, joinWalk, leaveWalk, setDateVotes, toggleVote } from '$lib/server/walks-db';
 import type { Actions } from './$types';
 
 // Walk details are members-only, so there's nothing to load here: once a
@@ -12,39 +13,39 @@ function text(data: FormData, key: string, max: number) {
 }
 
 // Every walker action carries the email they logged in with and the token the
-// database gave them for passing the log in check. The database checks both,
-// and uses the walker's stored name.
+// server gave them for passing the log in check. Both are checked on every
+// action, and the walker's stored name is used.
 function walkerOf(data: FormData) {
-	return { p_email: text(data, 'walker_email', 254), p_token: text(data, 'walker_token', 128) };
+	return [text(data, 'walker_email', 254), text(data, 'walker_token', 128)] as const;
 }
 
-// Turn database errors raised by our functions into a friendly message.
-function message(err: { code?: string; message: string }) {
-	return err.code === 'P0001' || err.code === 'P0002'
-		? err.message
-		: 'Something went wrong - please try again.';
+// Show our own messages; anything unexpected becomes a friendly generic one.
+function message(err: unknown) {
+	if (err instanceof UserError) return err.message;
+	console.error(err);
+	return 'Something went wrong - please try again.';
 }
 
 export const actions: Actions = {
 	join: async ({ request }) => {
 		const data = await request.formData();
 		const walkId = text(data, 'walk_id', 36);
-		const { error: err } = await supabase.rpc('angels_join_walk', {
-			p_walk_id: walkId,
-			...walkerOf(data)
-		});
-		if (err) return fail(400, { action: 'join', walkId, error: message(err) });
+		try {
+			await joinWalk(walkId, ...walkerOf(data));
+		} catch (err) {
+			return fail(400, { action: 'join', walkId, error: message(err) });
+		}
 		return { action: 'join', walkId };
 	},
 
 	leave: async ({ request }) => {
 		const data = await request.formData();
 		const walkId = text(data, 'walk_id', 36);
-		const { error: err } = await supabase.rpc('angels_leave_walk', {
-			p_walk_id: walkId,
-			...walkerOf(data)
-		});
-		if (err) return fail(400, { action: 'leave', walkId, error: message(err) });
+		try {
+			await leaveWalk(walkId, ...walkerOf(data));
+		} catch (err) {
+			return fail(400, { action: 'leave', walkId, error: message(err) });
+		}
 		return { action: 'leave', walkId };
 	},
 
@@ -57,12 +58,11 @@ export const actions: Actions = {
 			.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
 			.slice(0, 12);
 
-		const { error: err } = await supabase.rpc('angels_set_date_votes', {
-			p_walk_id: walkId,
-			p_dates: dates,
-			...walkerOf(data)
-		});
-		if (err) return fail(400, { action: 'dates', walkId, error: message(err) });
+		try {
+			await setDateVotes(walkId, dates, ...walkerOf(data));
+		} catch (err) {
+			return fail(400, { action: 'dates', walkId, error: message(err) });
+		}
 		return { action: 'dates', walkId, saved: true };
 	},
 
@@ -74,30 +74,29 @@ export const actions: Actions = {
 			return fail(400, { action: 'suggest', error: 'Please say where you would like to walk.', title, details });
 		}
 
-		const { error: err } = await supabase.rpc('angels_add_suggestion', {
-			p_title: title,
-			p_details: details,
-			...walkerOf(data)
-		});
-		if (err) return fail(400, { action: 'suggest', error: message(err), title, details });
+		try {
+			await addSuggestion(title, details, ...walkerOf(data));
+		} catch (err) {
+			return fail(400, { action: 'suggest', error: message(err), title, details });
+		}
 		return { action: 'suggest', success: true };
 	},
 
 	vote: async ({ request }) => {
 		const data = await request.formData();
-		const { error: err } = await supabase.rpc('angels_toggle_vote', {
-			p_suggestion_id: text(data, 'suggestion_id', 36),
-			...walkerOf(data)
-		});
-		if (err) return fail(400, { action: 'vote', error: message(err) });
+		try {
+			await toggleVote(text(data, 'suggestion_id', 36), ...walkerOf(data));
+		} catch (err) {
+			return fail(400, { action: 'vote', error: message(err) });
+		}
 	},
 
 	removeSuggestion: async ({ request }) => {
 		const data = await request.formData();
-		const { error: err } = await supabase.rpc('angels_delete_suggestion', {
-			p_suggestion_id: text(data, 'suggestion_id', 36),
-			...walkerOf(data)
-		});
-		if (err) return fail(400, { action: 'removeSuggestion', error: message(err) });
+		try {
+			await deleteOwnSuggestion(text(data, 'suggestion_id', 36), ...walkerOf(data));
+		} catch (err) {
+			return fail(400, { action: 'removeSuggestion', error: message(err) });
+		}
 	}
 };

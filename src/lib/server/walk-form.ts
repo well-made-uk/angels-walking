@@ -1,6 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { signRouteImage } from '$lib/server/route-images';
-import { ROUTE_BUCKET } from '$lib/server/supabase';
+import { InputFile } from 'node-appwrite/file';
+import { ID, Query, ROUTE_BUCKET, createRow, deleteRow, listAll, storage, updateRow } from '$lib/server/appwrite';
+import { UserError } from '$lib/server/walkers';
+import { deriveWalkFields } from '$lib/server/walks-db';
 import type { Difficulty, WalkFormErrors, WalkFormValues } from '$lib/types';
 import { lastVotingDay, MAX_RANGE_DAYS, MAX_VOTE_DAYS, daysBetween } from '$lib/walks';
 import { dayLabel } from '$lib/format';
@@ -9,7 +10,7 @@ const DIFFICULTIES: Difficulty[] = ['easy', 'moderate', 'challenging'];
 const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SUGGESTION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,35}$/;
 
 const str = (data: FormData, key: string, max = 2000) =>
 	String(data.get(key) ?? '')
@@ -80,7 +81,7 @@ export function readWalkForm(data: FormData) {
 		}
 	}
 
-	if (values.suggestion_id && !UUID.test(values.suggestion_id)) values.suggestion_id = '';
+	if (values.suggestion_id && !SUGGESTION_ID.test(values.suggestion_id)) values.suggestion_id = '';
 
 	const image = data.get('route_image');
 	const file = image instanceof File && image.size > 0 ? image : null;
@@ -94,17 +95,16 @@ interface Existing {
 	id: string;
 	walk_date: string | null;
 	vote_options: string[] | null;
-	route_image_path: string | null;
+	route_image_id: string | null;
 }
 
 /** Create (when `existing` is null) or update a walk. Returns the walk id, or an error message. */
 export async function saveWalk(
-	supabase: SupabaseClient,
 	form: ReturnType<typeof readWalkForm>,
 	existing: Existing | null
 ): Promise<{ id: string } | { error: string; field?: keyof WalkFormErrors }> {
 	const { values, file, durationMins } = form;
-	const id = existing?.id ?? crypto.randomUUID();
+	const id = existing?.id ?? ID.unique();
 
 	// A vote needs time to happen: voting closes 2 weeks before the earliest
 	// day on offer. (Checked when the days change; leaving them alone is fine.)
@@ -122,22 +122,35 @@ export async function saveWalk(
 		}
 	}
 
-	let imagePath = existing?.route_image_path ?? null;
-	const oldImage = imagePath;
-	let imageLink: { route_image_url: string | null; route_image_url_expires: string | null } | undefined;
+	let derived;
+	try {
+		derived = deriveWalkFields({
+			walk_date: values.date_mode === 'fixed' ? values.walk_date : null,
+			start_time: values.start_time,
+			vote_options: values.vote_options,
+			vote_deadline: values.vote_deadline || null
+		});
+	} catch (e) {
+		if (e instanceof UserError) return { field: 'vote_options', error: e.message };
+		throw e;
+	}
+
+	let imageId = existing?.route_image_id ?? null;
+	const oldImage = imageId;
 	if (file) {
-		imagePath = `${id}/${crypto.randomUUID()}.${IMAGE_TYPES[file.type]}`;
-		const up = await supabase.storage
-			.from(ROUTE_BUCKET)
-			.upload(imagePath, file, { contentType: file.type, cacheControl: '31536000' });
-		if (up.error) {
-			console.error(up.error);
+		imageId = ID.unique();
+		try {
+			await storage.createFile({
+				bucketId: ROUTE_BUCKET,
+				fileId: imageId,
+				file: InputFile.fromBuffer(Buffer.from(await file.arrayBuffer()), `route.${IMAGE_TYPES[file.type]}`)
+			});
+		} catch (e) {
+			console.error(e);
 			return { field: 'route_image', error: 'Could not upload the route image. Please try again.' };
 		}
-		imageLink = (await signRouteImage(supabase, imagePath)) ?? { route_image_url: null, route_image_url_expires: null };
 	} else if (values.remove_image) {
-		imagePath = null;
-		imageLink = { route_image_url: null, route_image_url_expires: null };
+		imageId = null;
 	}
 
 	const row = {
@@ -151,32 +164,30 @@ export async function saveWalk(
 		notes: values.notes || null,
 		start_time: values.start_time,
 		cancelled: values.cancelled,
-		route_image_path: imagePath,
-		...(imageLink ?? {}),
-		...(values.date_mode === 'fixed'
-			? { walk_date: values.walk_date }
-			: {
-					walk_date: null,
-					vote_options: values.vote_options,
-					// The database works out the closing time from this.
-					vote_deadline: values.vote_deadline || null
-				})
+		route_image_id: imageId,
+		walk_date: values.date_mode === 'fixed' ? values.walk_date : null,
+		vote_deadline: values.date_mode === 'fixed' ? null : values.vote_deadline || null,
+		...derived
 	};
 
-	const res = existing
-		? await supabase.from('angels_walks').update(row).eq('id', id)
-		: await supabase
-				.from('angels_walks')
-				.insert({ id, ...row, suggestion_id: values.suggestion_id || null });
+	try {
+		if (existing) await updateRow('walks', id, row);
+		else await createRow('walks', id, { ...row, suggestion_id: values.suggestion_id || null });
 
-	if (res.error) {
-		console.error(res.error);
-		if (file && imagePath) await supabase.storage.from(ROUTE_BUCKET).remove([imagePath]);
+		// Votes for days that are no longer on offer are dropped.
+		if (existing && derived.vote_options) {
+			const keep = new Set(derived.vote_options);
+			const votes = await listAll<{ vote_date: string }>('date_votes', [Query.equal('walk_id', id)]);
+			for (const v of votes) if (!keep.has(v.vote_date)) await deleteRow('date_votes', v.$id);
+		}
+	} catch (e) {
+		console.error(e);
+		if (file && imageId) await storage.deleteFile({ bucketId: ROUTE_BUCKET, fileId: imageId }).catch(console.error);
 		return { error: 'Could not save the walk. Please try again.' };
 	}
 
-	if (oldImage && oldImage !== imagePath) {
-		await supabase.storage.from(ROUTE_BUCKET).remove([oldImage]);
+	if (oldImage && oldImage !== imageId) {
+		await storage.deleteFile({ bucketId: ROUTE_BUCKET, fileId: oldImage }).catch(console.error);
 	}
 
 	return { id };

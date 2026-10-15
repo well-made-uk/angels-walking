@@ -1,14 +1,12 @@
 import type { Handle } from '@sveltejs/kit';
-import { createSessionClient } from '$lib/server/supabase';
+import { SESSION_COOKIE } from '$lib/server/organiser';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	// Only organisers sign in. Walkers are identified by the name and email
+	// Only organisers sign in. Walkers are identified by the email and token
 	// their browser sends with each action (see src/lib/walker.svelte.ts).
-	if (event.url.pathname.startsWith('/organiser')) {
-		event.locals.supabase = createSessionClient(event.cookies);
-	}
+	event.locals.sessionSecret = event.url.pathname.startsWith('/organiser')
+		? (event.cookies.get(SESSION_COOKIE) ?? null)
+		: null;
 
-	return resolve(event, {
-		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
-	});
+	return resolve(event);
 };
