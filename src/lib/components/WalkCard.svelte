@@ -111,7 +111,7 @@
 	{/if}
 
 	{#if voting && poll && !walk.cancelled}
-		<DatePoll walkId={walk.id} {poll} mine={myDates} closesAt={walk.votes_close_at} {saved} {error} />
+		<DatePoll walkId={walk.id} {poll} mine={myDates} opensAt={walk.votes_open_at} closesAt={walk.votes_close_at} {saved} {error} />
 	{:else}
 		<section class="people" aria-label="Who's going">
 			<h4>

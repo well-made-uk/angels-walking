@@ -10,9 +10,11 @@ export interface Walk {
 	walk_month: string;
 	/** The days on offer while the date is being voted on. */
 	vote_options: string[] | null;
-	/** Organiser's own last voting day (null = 2 weeks before the first option). */
+	/** Organiser's own last voting day (null = 3 weeks before the first option). */
 	vote_deadline: string | null;
 	start_time: string;
+	/** When voting opens (5 weeks before the first option); null once the date is fixed. */
+	votes_open_at: string | null;
 	votes_close_at: string | null;
 	meeting_point: string;
 	distance_km: number | null;
@@ -53,6 +55,8 @@ export interface FeedWalk {
 	walk_month: string;
 	vote_options: string[] | null;
 	start_time: string;
+	/** When voting opens; null once the date is fixed. */
+	votes_open_at: string | null;
 	votes_close_at: string | null;
 	meeting_point: string;
 	distance_km: number | null;

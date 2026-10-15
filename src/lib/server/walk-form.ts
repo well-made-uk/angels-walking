@@ -3,7 +3,7 @@ import { ID, Query, ROUTE_BUCKET, createRow, deleteRow, listAll, storage, update
 import { UserError } from '$lib/server/walkers';
 import { deriveWalkFields } from '$lib/server/walks-db';
 import type { Difficulty, WalkFormErrors, WalkFormValues } from '$lib/types';
-import { lastVotingDay, MAX_RANGE_DAYS, MAX_VOTE_DAYS, daysBetween } from '$lib/walks';
+import { firstVotingDay, lastVotingDay, MAX_RANGE_DAYS, MAX_VOTE_DAYS, daysBetween } from '$lib/walks';
 import { dayLabel } from '$lib/format';
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'moderate', 'challenging'];
@@ -76,8 +76,10 @@ export function readWalkForm(data: FormData) {
 		const today = new Date().toISOString().slice(0, 10);
 		if (!ISO_DAY.test(values.vote_deadline)) errors.vote_deadline = 'Pick the last day people can vote.';
 		else if (values.vote_deadline < today) errors.vote_deadline = 'The deadline can’t be in the past.';
-		else if (values.vote_deadline >= values.vote_options[0]) {
-			errors.vote_deadline = 'The deadline needs to be before the first day on offer.';
+		else if (values.vote_deadline > lastVotingDay(values.vote_options[0])) {
+			errors.vote_deadline = `Voting has to close at least 3 weeks before the first day on offer, so the latest deadline is ${dayLabel(lastVotingDay(values.vote_options[0]), 'long')}.`;
+		} else if (values.vote_deadline < firstVotingDay(values.vote_options[0])) {
+			errors.vote_deadline = `Voting doesn’t open until ${dayLabel(firstVotingDay(values.vote_options[0]), 'long')}, so the deadline can’t be earlier than that.`;
 		}
 	}
 
@@ -106,7 +108,7 @@ export async function saveWalk(
 	const { values, file, durationMins } = form;
 	const id = existing?.id ?? ID.unique();
 
-	// A vote needs time to happen: voting closes 2 weeks before the earliest
+	// A vote needs time to happen: voting closes 3 weeks before the earliest
 	// day on offer. (Checked when the days change; leaving them alone is fine.)
 	const optionsChanged =
 		!existing || existing.walk_date !== null || (existing.vote_options ?? []).join() !== values.vote_options.join();
@@ -117,7 +119,7 @@ export async function saveWalk(
 		if (lastVotingDay(first) < today) {
 			return {
 				field: 'vote_options',
-				error: `Voting would already be closed, because ${dayLabel(first, 'long')} is less than 2 weeks away. Set your own voting deadline below, untick the earliest days, or pick a fixed date.`
+				error: `Voting would already be closed: voting closes 3 weeks before the earliest day, and ${dayLabel(first, 'long')} is less than that away. Untick the earliest days or pick a fixed date.`
 			};
 		}
 	}

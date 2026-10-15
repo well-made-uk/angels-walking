@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { bankHoliday } from '$lib/bank-holidays';
-	import { dayLabel, votingClosesLabel } from '$lib/format';
+	import { dayLabel, votingClosesLabel, walkDate } from '$lib/format';
 	import type { DatePoll } from '$lib/types';
 	import { withWalker } from '$lib/walker.svelte';
 
@@ -10,17 +10,22 @@
 		poll: DatePoll;
 		/** Days this walker has already voted for. */
 		mine: string[];
+		/** When voting opens; null if it is already open. */
+		opensAt?: string | null;
 		closesAt: string | null;
 		saved?: boolean;
 		error?: string;
 	}
 
-	let { walkId, poll, mine, closesAt, saved = false, error }: Props = $props();
+	let { walkId, poll, mine, opensAt = null, closesAt, saved = false, error }: Props = $props();
 
 	let busy = $state(false);
 	// Start from what this visitor voted last time (and reset when the server
 	// sends fresh data); ticking boxes overrides it locally.
 	let picked = $derived([...mine]);
+
+	// Voting opens 5 weeks before the first day, so people vote close enough to know their plans.
+	const notOpen = $derived(!!opensAt && new Date(opensAt).getTime() > Date.now());
 
 	const top = $derived(Math.max(0, ...poll.options.map((o) => o.votes)));
 	const changed = $derived(
@@ -30,12 +35,20 @@
 
 <section class="poll" aria-labelledby="poll-{walkId}">
 	<h4 id="poll-{walkId}">Which days could you make?</h4>
-	<p class="hint">
-		Tick every day that works for you. The day most people can make will be chosen
-		{#if closesAt}
-			after voting closes at the end of <strong>{votingClosesLabel(closesAt)}</strong>.
-		{/if}
-	</p>
+	{#if notOpen && opensAt}
+		<p class="hint opens" role="status">
+			Voting opens on <strong>{walkDate(opensAt)}</strong>{#if closesAt}
+				and closes at the end of <strong>{votingClosesLabel(closesAt)}</strong>{/if}. Come back then to pick the days
+			you can make.
+		</p>
+	{:else}
+		<p class="hint">
+			Tick every day that works for you. The day most people can make will be chosen
+			{#if closesAt}
+				after voting closes at the end of <strong>{votingClosesLabel(closesAt)}</strong>.
+			{/if}
+		</p>
+	{/if}
 
 	<form
 		method="POST"
@@ -47,8 +60,8 @@
 			{#each poll.options as o (o.date)}
 				{@const leading = top > 0 && o.votes === top}
 				<li>
-					<label class:checked={picked.includes(o.date)} class:leading>
-						<input type="checkbox" name="dates" value={o.date} bind:group={picked} />
+					<label class:checked={picked.includes(o.date)} class:leading class:waiting={notOpen}>
+						<input type="checkbox" name="dates" value={o.date} bind:group={picked} disabled={notOpen} />
 						<span class="day">
 							{dayLabel(o.date)}
 							{#if bankHoliday(o.date)}<small class="holiday" title={bankHoliday(o.date)}>Bank hol</small>{/if}
@@ -70,7 +83,7 @@
 					? 'No votes yet — be the first!'
 					: `${poll.voters} ${poll.voters === 1 ? 'person has' : 'people have'} voted`}
 			</p>
-			<button class="btn btn-primary" disabled={busy}>
+			<button class="btn btn-primary" disabled={busy || notOpen}>
 				{busy ? 'Saving…' : mine.length ? 'Update my days' : 'Save my days'}
 			</button>
 		</div>
@@ -99,6 +112,18 @@
 		margin: 0 0 0.75rem;
 		color: var(--muted);
 		font-size: 0.95rem;
+	}
+
+	.hint.opens {
+		padding: 0.6rem 0.8rem;
+		border-radius: var(--radius-sm);
+		background: var(--accent-soft);
+		color: inherit;
+	}
+
+	label.waiting {
+		cursor: default;
+		opacity: 0.7;
 	}
 
 	ul {

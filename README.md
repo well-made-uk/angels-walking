@@ -121,9 +121,13 @@ upload.
 For a vote, choose a date range (up to about three months). A calendar opens
 with every **Saturday, Sunday and bank holiday** in that range already ticked;
 tap any day to add or remove it. Walkers then tick every day on offer they can
-make. Voting closes **2 weeks before the earliest day on offer**, or on your
-own deadline if you tick "Choose a different deadline" (handy at short notice:
-any day from today up to the day before the first option). Then the day
+make. Voting **opens 5 weeks before the earliest day on offer and closes 3
+weeks before it** (at midnight), so people vote close enough to the date to know
+their plans. Before it opens, walkers see when it opens and can't vote; the
+server enforces this too. You can pick an earlier deadline with "Choose an
+earlier deadline", but not a later one, and not before voting opens. If the
+earliest day is less than 3 weeks away there's no time for a vote, so untick the
+earliest days or use a fixed date. When voting closes the day
 most people can make is locked in (ties go to the earliest day; with no votes,
 the earliest day on offer). The walk then becomes a normal walk that people
 sign up for. You can also close the vote early from the walk's page. If you
@@ -136,8 +140,9 @@ to the end of 2028), so add the next year's dates from
 https://www.gov.uk/bank-holidays.json when they appear.
 
 Locking happens the next time anyone opens the site after voting closes, so no
-scheduled job is needed. To change the 2 weeks, edit `VOTE_LEAD_DAYS` in
-`src/lib/walks.ts`.
+scheduled job is needed. To change when voting opens and closes, edit
+`VOTE_OPEN_DAYS` (35) and `VOTE_LEAD_DAYS` (21) in `src/lib/walks.ts`. Opening
+time is worked out from the earliest day on offer, so it isn't stored.
 
 **Cancelling:** tick "This walk is cancelled" when editing. It stays on the page,
 marked as cancelled. "Delete this walk" removes it completely, along with its

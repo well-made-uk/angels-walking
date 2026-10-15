@@ -8,6 +8,7 @@
 		daysBetween,
 		defaultVoteDays,
 		isWeekend,
+		firstVotingDay,
 		iso,
 		lastVotingDay,
 		MAX_RANGE_DAYS,
@@ -42,7 +43,11 @@
 	const today = iso(new Date());
 	const autoDeadline = $derived(sortedPicks.length ? lastVotingDay(sortedPicks[0]) : '');
 	const autoPassed = $derived(!!autoDeadline && autoDeadline < today);
-	const latestDeadline = $derived(sortedPicks.length ? addDays(sortedPicks[0], -1) : '');
+	// Voting opens 5 weeks before the earliest day and closes 3 weeks before it; your own
+	// deadline can only be earlier than that, and not before voting opens.
+	const opensDay = $derived(sortedPicks.length ? firstVotingDay(sortedPicks[0]) : '');
+	const latestDeadline = $derived(autoDeadline);
+	const earliestDeadline = $derived(opensDay > today ? opensDay : today);
 
 	// Whole months covering the range, as weeks (Monday first) of days.
 	const calendar = $derived.by(() => {
@@ -310,30 +315,37 @@
 								Voting closes at the end of <strong>{dayLabel(deadline, 'long')}</strong>, then the most popular day
 								is locked in.
 							{:else if autoPassed}
-								Normally voting would close 2 weeks before the earliest day, but that was
-								<strong>{dayLabel(autoDeadline, 'long')}</strong>, so set your own deadline below.
+								Voting closes 3 weeks before the earliest day, which was
+								<strong>{dayLabel(autoDeadline, 'long')}</strong>, so there's no time left for a vote. Untick the
+								earliest days, or choose a fixed date instead.
 							{:else}
-								Voting closes at the end of <strong>{dayLabel(autoDeadline, 'long')}</strong>, 2 weeks before the
-								earliest day, then the most popular day is locked in.
+								Voting opens on <strong>{dayLabel(opensDay, 'long')}</strong> (5 weeks before the earliest day) and
+								closes at the end of <strong>{dayLabel(autoDeadline, 'long')}</strong> (3 weeks before), then the
+								most popular day is locked in.
 							{/if}
 						</p>
-						<label class="check">
-							<input type="checkbox" name="custom_deadline" bind:checked={customDeadline} onchange={onCustomDeadline} />
-							Choose a different deadline
-						</label>
-						{#if customDeadline}
+						{#if !autoPassed}
+							<label class="check">
+								<input type="checkbox" name="custom_deadline" bind:checked={customDeadline} onchange={onCustomDeadline} />
+								Choose an earlier deadline
+							</label>
+						{/if}
+						{#if customDeadline && !autoPassed}
 							<label class="inline deadline-date">
 								Last day to vote
 								<input
 									type="date"
 									name="vote_deadline"
 									bind:value={deadline}
-									min={today}
+									min={earliestDeadline}
 									max={latestDeadline}
 									required
 								/>
 							</label>
-							<p class="hint">Any day from today up to the day before the first day on offer. Voting closes at midnight.</p>
+							<p class="hint">
+								Any day from {dayLabel(earliestDeadline, 'long')} up to {dayLabel(latestDeadline, 'long')}. Voting
+								closes at midnight.
+							</p>
 						{/if}
 						{#if errors.vote_deadline}<p class="field-error">{errors.vote_deadline}</p>{/if}
 					</div>

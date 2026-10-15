@@ -1,5 +1,6 @@
 import type { Difficulty, Feed, FeedWalk, OrganiserSuggestion, Walk } from '$lib/types';
-import { addDays, MAX_VOTE_DAYS, VOTE_LEAD_DAYS } from '$lib/walks';
+import { dayLabel, walkDate } from '$lib/format';
+import { addDays, firstVotingDay, lastVotingDay, MAX_VOTE_DAYS, voteDays } from '$lib/walks';
 import {
 	ID,
 	Query,
@@ -99,13 +100,30 @@ export function deriveWalkFields(w: {
 	if (w.vote_deadline && w.vote_deadline >= first) {
 		throw new UserError('The voting deadline needs to be before the first day on offer');
 	}
-	const lastDay = w.vote_deadline || addDays(first, -VOTE_LEAD_DAYS - 1);
+	// Voting always closes at least 3 weeks before the first day, and a custom
+	// deadline can only make it earlier (but not before voting has opened).
+	if (w.vote_deadline && w.vote_deadline > lastVotingDay(first)) {
+		throw new UserError(
+			`Voting has to close at least 3 weeks before the first day on offer, so the deadline can't be later than ${dayLabel(lastVotingDay(first), 'long')}`
+		);
+	}
+	if (w.vote_deadline && w.vote_deadline < firstVotingDay(first)) {
+		throw new UserError(`The deadline can't be before voting opens, on ${dayLabel(firstVotingDay(first), 'long')}`);
+	}
+	const lastDay = w.vote_deadline || lastVotingDay(first);
 	return {
 		walk_month: `${first.slice(0, 7)}-01`,
 		starts_at: null as string | null,
 		votes_close_at: londonToUtc(addDays(lastDay, 1)).toISOString(),
 		vote_options: options
 	};
+}
+
+/** When voting opens for a walk, or null once its date is fixed. */
+export function votesOpenAt(w: { walk_date: string | null; vote_options: string[] | null; walk_month: string }) {
+	if (w.walk_date) return null;
+	const first = [...voteDays(w)].sort()[0];
+	return first ? londonToUtc(firstVotingDay(first)).toISOString() : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +166,7 @@ export async function loadWalk(id: string): Promise<Walk | null> {
 		vote_options: row.vote_options,
 		vote_deadline: row.vote_deadline,
 		start_time: row.start_time,
+		votes_open_at: votesOpenAt(row),
 		votes_close_at: row.votes_close_at,
 		meeting_point: row.meeting_point,
 		distance_km: row.distance_km,
@@ -221,6 +240,10 @@ export async function setDateVotes(walkId: string, dates: string[], email: unkno
 	if (!w) throw new UserError('Walk not found');
 	if (w.cancelled || w.walk_date || (w.votes_close_at && new Date(w.votes_close_at).getTime() <= Date.now())) {
 		throw new UserError('Voting for this walk has closed');
+	}
+	const opens = votesOpenAt(w);
+	if (opens && new Date(opens).getTime() > Date.now()) {
+		throw new UserError(`Voting for this walk opens on ${walkDate(opens)}.`);
 	}
 	const unique = [...new Set(dates)];
 	const allowed = new Set(w.vote_options ?? []);
@@ -381,6 +404,7 @@ export async function walkerFeed(maxWalks = 2): Promise<Feed> {
 			walk_month: w.walk_month,
 			vote_options: w.vote_options,
 			start_time: w.start_time,
+			votes_open_at: votesOpenAt(w),
 			votes_close_at: w.votes_close_at,
 			meeting_point: w.meeting_point,
 			distance_km: w.distance_km,

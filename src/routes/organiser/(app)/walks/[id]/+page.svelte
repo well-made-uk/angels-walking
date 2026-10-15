@@ -73,6 +73,7 @@
 		<h2>Voting on a day, {dayRangeLabel(voteDays(walk))}</h2>
 		<p class="muted">
 			{data.voters} {data.voters === 1 ? 'person has' : 'people have'} voted.
+			{#if walk.votes_open_at && new Date(walk.votes_open_at).getTime() > Date.now()}Opens {walkDate(walk.votes_open_at)}.{/if}
 			{#if walk.votes_close_at}Closes at the end of {votingClosesLabel(walk.votes_close_at)}.{/if}
 		</p>
 		<ul class="tally">
