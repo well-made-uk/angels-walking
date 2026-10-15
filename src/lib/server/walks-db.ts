@@ -113,6 +113,22 @@ export function deriveWalkFields(w: {
 
 const bySignupOrder = (a: Row<SignupData>, b: Row<SignupData>) => a.$createdAt.localeCompare(b.$createdAt);
 
+/**
+ * Walkers' current names, keyed by email. Sign-ups and ideas keep a copy of the name
+ * from when they were made, but the walker record is the one that gets corrected, so
+ * names shown in the app come from here and the stored copy is only a fallback.
+ */
+async function currentNames(emails: Iterable<string>) {
+	const wanted = [...new Set(emails)].filter(Boolean);
+	const names = new Map<string, string>();
+	for (let i = 0; i < wanted.length; i += 100) {
+		const chunk = wanted.slice(i, i + 100);
+		const rows = await listAll<{ email: string; name: string | null }>('walkers', [Query.equal('email', chunk)]);
+		for (const w of rows) if (w.name) names.set(w.email, w.name);
+	}
+	return names;
+}
+
 /** A walk with its sign-ups and the person who suggested it (organiser pages). */
 export async function loadWalk(id: string): Promise<Walk | null> {
 	const row = await getRow<WalkData>('walks', id);
@@ -121,6 +137,7 @@ export async function loadWalk(id: string): Promise<Walk | null> {
 		listAll<SignupData>('signups', [Query.equal('walk_id', id)]),
 		row.suggestion_id ? getRow<SuggestionData>('suggestions', row.suggestion_id) : null
 	]);
+	const names = await currentNames([...signups.map((s) => s.walker_email), suggestion?.walker_email ?? '']);
 	return {
 		id: row.$id,
 		title: row.title,
@@ -142,8 +159,12 @@ export async function loadWalk(id: string): Promise<Walk | null> {
 		route_image_id: row.route_image_id,
 		route_image_url: routeImageUrl(row.route_image_id),
 		suggestion_id: row.suggestion_id,
-		suggestion: suggestion ? { suggested_by: suggestion.suggested_by } : null,
-		signups: signups.sort(bySignupOrder).map((s) => ({ id: s.$id, name: s.name, created_at: s.$createdAt }))
+		suggestion: suggestion
+			? { suggested_by: names.get(suggestion.walker_email) ?? suggestion.suggested_by }
+			: null,
+		signups: signups
+			.sort(bySignupOrder)
+			.map((s) => ({ id: s.$id, name: names.get(s.walker_email) ?? s.name, created_at: s.$createdAt }))
 	};
 }
 
@@ -309,6 +330,7 @@ export async function suggestionsView(): Promise<(OrganiserSuggestion & { walker
 	const votes = new Map<string, number>();
 	for (const h of hearts) votes.set(h.suggestion_id, (votes.get(h.suggestion_id) ?? 0) + 1);
 	const promoted = new Set(planned.map((w) => w.suggestion_id));
+	const names = await currentNames(ideas.map((s) => s.walker_email));
 	return ideas.map((s) => ({
 		id: s.$id,
 		title: s.title,
@@ -316,7 +338,7 @@ export async function suggestionsView(): Promise<(OrganiserSuggestion & { walker
 		created_at: s.$createdAt,
 		votes: votes.get(s.$id) ?? 0,
 		promoted: promoted.has(s.$id),
-		suggested_by: s.suggested_by,
+		suggested_by: names.get(s.walker_email) ?? s.suggested_by,
 		walker_email: s.walker_email
 	}));
 }
@@ -344,6 +366,7 @@ export async function walkerFeed(maxWalks = 2): Promise<Feed> {
 		suggestionsView()
 	]);
 	const authors = new Map(ideas.map((s) => [s.id, s.suggested_by]));
+	const names = await currentNames(signups.map((s) => s.walker_email));
 
 	const walks: FeedWalk[] = shown.map((w) => {
 		const mine = votes.filter((v) => v.walk_id === w.$id);
@@ -371,7 +394,7 @@ export async function walkerFeed(maxWalks = 2): Promise<Feed> {
 			signups: signups
 				.filter((s) => s.walk_id === w.$id)
 				.sort(bySignupOrder)
-				.map((s) => ({ id: s.$id, name: s.name, created_at: s.$createdAt })),
+				.map((s) => ({ id: s.$id, name: names.get(s.walker_email) ?? s.name, created_at: s.$createdAt })),
 			tallies: w.walk_date
 				? []
 				: [...counts].sort((a, b) => a[0].localeCompare(b[0])).map(([date, n]) => ({ date, votes: n })),
@@ -407,9 +430,10 @@ export async function myActivity(email: string) {
 
 export async function attendees(walkId: string) {
 	const signups = await listAll<SignupData>('signups', [Query.equal('walk_id', walkId)]);
+	const names = await currentNames(signups.map((s) => s.walker_email));
 	return signups
 		.sort(bySignupOrder)
-		.map((s) => ({ id: s.$id, name: s.name, email: s.walker_email, created_at: s.$createdAt }));
+		.map((s) => ({ id: s.$id, name: names.get(s.walker_email) ?? s.name, email: s.walker_email, created_at: s.$createdAt }));
 }
 
 export interface DashboardWalk {
