@@ -10,10 +10,10 @@ export interface Walk {
 	walk_month: string;
 	/** The days on offer while the date is being voted on. */
 	vote_options: string[] | null;
-	/** Organiser's own last voting day (null = 3 weeks before the first option). */
-	vote_deadline: string | null;
+	/** The day voting opens (voting then runs for a week); null once the date is fixed. */
+	vote_opens: string | null;
 	start_time: string;
-	/** When voting opens (5 weeks before the first option); null once the date is fixed. */
+	/** When voting opens; null once the date is fixed. */
 	votes_open_at: string | null;
 	votes_close_at: string | null;
 	meeting_point: string;
@@ -104,8 +104,8 @@ export interface WalkFormValues {
 	range_start: string;
 	range_end: string;
 	vote_options: string[];
-	/** Custom last voting day, or '' for the automatic one. */
-	vote_deadline: string;
+	/** The day voting opens; it runs for a week from then. */
+	vote_opens: string;
 	walk_date: string;
 	suggestion_id: string;
 	cancelled: boolean;

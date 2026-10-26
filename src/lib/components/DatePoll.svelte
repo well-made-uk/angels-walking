@@ -24,7 +24,7 @@
 	// sends fresh data); ticking boxes overrides it locally.
 	let picked = $derived([...mine]);
 
-	// Voting opens 5 weeks before the first day, so people vote close enough to know their plans.
+	// Voting only opens a few weeks before the walk (and lasts a week), so people vote close enough to know their plans.
 	const notOpen = $derived(!!opensAt && new Date(opensAt).getTime() > Date.now());
 
 	const top = $derived(Math.max(0, ...poll.options.map((o) => o.votes)));
@@ -37,8 +37,7 @@
 	<h4 id="poll-{walkId}">Which days could you make?</h4>
 	{#if notOpen && opensAt}
 		<p class="hint opens" role="status">
-			Voting opens on <strong>{walkDate(opensAt)}</strong>{#if closesAt}
-				and closes at the end of <strong>{votingClosesLabel(closesAt)}</strong>{/if}. Come back then to pick the days
+			Voting opens on <strong>{walkDate(opensAt)}</strong>{#if closesAt} and closes at the end of <strong>{votingClosesLabel(closesAt)}</strong>{/if}. Come back then to pick the days
 			you can make.
 		</p>
 	{:else}

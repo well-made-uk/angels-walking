@@ -121,13 +121,14 @@ upload.
 For a vote, choose a date range (up to about three months). A calendar opens
 with every **Saturday, Sunday and bank holiday** in that range already ticked;
 tap any day to add or remove it. Walkers then tick every day on offer they can
-make. Voting **opens 5 weeks before the earliest day on offer and closes 3
-weeks before it** (at midnight), so people vote close enough to the date to know
-their plans. Before it opens, walkers see when it opens and can't vote; the
-server enforces this too. You can pick an earlier deadline with "Choose an
-earlier deadline", but not a later one, and not before voting opens. If the
-earliest day is less than 3 weeks away there's no time for a vote, so untick the
-earliest days or use a fixed date. When voting closes the day
+make. Voting **lasts one week**, so people give their availability close to the
+walk and don't make other plans while it's still open. When you plan a vote the
+form suggests opening it **6 weeks before the earliest day on offer** (so it
+closes 5 weeks before) and you can change the opening day to any day from today
+up to a week before the earliest day. It closes at midnight at the end of the
+seventh day. Before it opens, walkers see when it opens and can't vote; the
+server enforces this too. If the earliest day is less than a week away there's no
+time for a vote, so untick the earliest days or use a fixed date. When voting closes the day
 most people can make is locked in (ties go to the earliest day; with no votes,
 the earliest day on offer). The walk then becomes a normal walk that people
 sign up for. You can also close the vote early from the walk's page. If you
@@ -140,9 +141,11 @@ to the end of 2028), so add the next year's dates from
 https://www.gov.uk/bank-holidays.json when they appear.
 
 Locking happens the next time anyone opens the site after voting closes, so no
-scheduled job is needed. To change when voting opens and closes, edit
-`VOTE_OPEN_DAYS` (35) and `VOTE_LEAD_DAYS` (21) in `src/lib/walks.ts`. Opening
-time is worked out from the earliest day on offer, so it isn't stored.
+scheduled job is needed. To change the suggested opening
+(6 weeks) or the length of a vote (1 week), edit `VOTE_OPEN_DAYS` and
+`VOTE_LENGTH_DAYS` in `src/lib/walks.ts` (and `OPEN_DAYS` in
+`functions/vote-notify/src/main.js`, used only for walks made before the opening
+day was stored). The chosen opening day is stored on the walk as `vote_opens`.
 
 **Cancelling:** tick "This walk is cancelled" when editing. It stays on the page,
 marked as cancelled. "Delete this walk" removes it completely, along with its

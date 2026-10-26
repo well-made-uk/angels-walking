@@ -26,7 +26,7 @@ export function emptyValues(): WalkFormValues {
 		range_start: '',
 		range_end: '',
 		vote_options: [],
-		vote_deadline: '',
+		vote_opens: '',
 		walk_date: '',
 		suggestion_id: '',
 		cancelled: false,
@@ -52,7 +52,7 @@ export function valuesFromWalk(w: Walk): WalkFormValues {
 			const days = voteDays(w);
 			return { range_start: days[0], range_end: days[days.length - 1], vote_options: days };
 		})(),
-		vote_deadline: w.vote_deadline ?? '',
+		vote_opens: w.vote_opens ?? '',
 		walk_date: w.walk_date ?? '',
 		suggestion_id: w.suggestion_id ?? '',
 		cancelled: w.cancelled,

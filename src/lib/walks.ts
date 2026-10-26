@@ -4,12 +4,12 @@ import { bankHoliday } from '$lib/bank-holidays';
 // the default date range - organisers can pick any days.)
 export const WALK_MONTHS = [2, 4, 6, 8, 10, 12];
 
-// A vote runs for the two weeks that sit between these two points, counted back
-// from the earliest day on offer: it opens 5 weeks before, and closes 3 weeks
-// before (at midnight starting that day). Opening late stops people voting months
-// ahead for days they have since made other plans for.
-export const VOTE_OPEN_DAYS = 35;
-export const VOTE_LEAD_DAYS = 21;
+// A vote runs for one week, so people give their availability close to the walk
+// and don't make other plans while it's still open. The opening day is suggested
+// as 6 weeks before the earliest day on offer (so it closes 5 weeks before), and
+// the organiser can change it. It closes at midnight at the end of the last day.
+export const VOTE_OPEN_DAYS = 42;
+export const VOTE_LENGTH_DAYS = 7;
 
 // Longest date range the organiser form offers, and most days in one vote.
 export const MAX_RANGE_DAYS = 93;
@@ -52,11 +52,20 @@ export function weekendDates(month: string): string[] {
 export const voteDays = (w: { vote_options?: string[] | null; walk_month: string }) =>
 	w.vote_options?.length ? w.vote_options : weekendDates(w.walk_month);
 
-/** The last day people can vote when the earliest option is `firstDay`. */
-export const lastVotingDay = (firstDay: string) => addDays(firstDay, -VOTE_LEAD_DAYS - 1);
+/**
+ * The opening day to suggest when the earliest option is `firstDay`: 6 weeks
+ * before it, or today if that has already passed.
+ */
+export function suggestedVoteOpen(firstDay: string, today = iso(new Date())) {
+	const usual = addDays(firstDay, -VOTE_OPEN_DAYS);
+	return usual > today ? usual : today;
+}
 
-/** The first day people can vote when the earliest option is `firstDay`. */
-export const firstVotingDay = (firstDay: string) => addDays(firstDay, -VOTE_OPEN_DAYS);
+/** The last day people can vote when voting opens on `openDay`. */
+export const lastVotingDay = (openDay: string) => addDays(openDay, VOTE_LENGTH_DAYS - 1);
+
+/** The latest day voting can open and still finish before `firstDay`. */
+export const latestVoteOpen = (firstDay: string) => addDays(firstDay, -VOTE_LENGTH_DAYS);
 
 /** Upcoming walk months (first of month) over the next `count` months. */
 export function upcomingWalkMonths(from = new Date(), count = 14): { month: string; votingOpen: boolean }[] {
@@ -66,7 +75,7 @@ export function upcomingWalkMonths(from = new Date(), count = 14): { month: stri
 		const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + i, 1));
 		if (!WALK_MONTHS.includes(d.getUTCMonth() + 1)) continue;
 		const month = iso(d);
-		out.push({ month, votingOpen: lastVotingDay(month) >= today });
+		out.push({ month, votingOpen: latestVoteOpen(month) >= today });
 	}
 	return out;
 }

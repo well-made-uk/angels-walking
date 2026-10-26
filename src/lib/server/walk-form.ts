@@ -3,7 +3,7 @@ import { ID, Query, ROUTE_BUCKET, createRow, deleteRow, listAll, storage, update
 import { UserError } from '$lib/server/walkers';
 import { deriveWalkFields } from '$lib/server/walks-db';
 import type { Difficulty, WalkFormErrors, WalkFormValues } from '$lib/types';
-import { firstVotingDay, lastVotingDay, MAX_RANGE_DAYS, MAX_VOTE_DAYS, daysBetween } from '$lib/walks';
+import { latestVoteOpen, MAX_RANGE_DAYS, MAX_VOTE_DAYS, VOTE_LENGTH_DAYS, daysBetween } from '$lib/walks';
 import { dayLabel } from '$lib/format';
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'moderate', 'challenging'];
@@ -36,7 +36,7 @@ export function readWalkForm(data: FormData) {
 			.filter((d) => ISO_DAY.test(d))
 			.sort()
 			.slice(0, MAX_VOTE_DAYS + 1),
-		vote_deadline: data.get('custom_deadline') === 'on' ? str(data, 'vote_deadline', 10) : '',
+		vote_opens: str(data, 'vote_opens', 10),
 		walk_date: str(data, 'walk_date', 10),
 		suggestion_id: str(data, 'suggestion_id', 36),
 		cancelled: data.get('cancelled') === 'on',
@@ -72,15 +72,10 @@ export function readWalkForm(data: FormData) {
 		errors.vote_options = 'Tick at least one day for people to vote on.';
 	} else if (values.vote_options.length > MAX_VOTE_DAYS) {
 		errors.vote_options = `That's a lot of days - pick ${MAX_VOTE_DAYS} or fewer.`;
-	} else if (data.get('custom_deadline') === 'on') {
-		const today = new Date().toISOString().slice(0, 10);
-		if (!ISO_DAY.test(values.vote_deadline)) errors.vote_deadline = 'Pick the last day people can vote.';
-		else if (values.vote_deadline < today) errors.vote_deadline = 'The deadline can’t be in the past.';
-		else if (values.vote_deadline > lastVotingDay(values.vote_options[0])) {
-			errors.vote_deadline = `Voting has to close at least 3 weeks before the first day on offer, so the latest deadline is ${dayLabel(lastVotingDay(values.vote_options[0]), 'long')}.`;
-		} else if (values.vote_deadline < firstVotingDay(values.vote_options[0])) {
-			errors.vote_deadline = `Voting doesn’t open until ${dayLabel(firstVotingDay(values.vote_options[0]), 'long')}, so the deadline can’t be earlier than that.`;
-		}
+	} else if (!ISO_DAY.test(values.vote_opens)) {
+		errors.vote_opens = 'Pick the day voting opens.';
+	} else if (values.vote_opens > latestVoteOpen(values.vote_options[0])) {
+		errors.vote_opens = `Voting runs for ${VOTE_LENGTH_DAYS} days, so to finish before the first day on offer it has to open by ${dayLabel(latestVoteOpen(values.vote_options[0]), 'long')}.`;
 	}
 
 	if (values.suggestion_id && !SUGGESTION_ID.test(values.suggestion_id)) values.suggestion_id = '';
@@ -96,7 +91,7 @@ export function readWalkForm(data: FormData) {
 interface Existing {
 	id: string;
 	walk_date: string | null;
-	vote_options: string[] | null;
+	vote_opens: string | null;
 	route_image_id: string | null;
 }
 
@@ -108,20 +103,11 @@ export async function saveWalk(
 	const { values, file, durationMins } = form;
 	const id = existing?.id ?? ID.unique();
 
-	// A vote needs time to happen: voting closes 3 weeks before the earliest
-	// day on offer. (Checked when the days change; leaving them alone is fine.)
-	const optionsChanged =
-		!existing || existing.walk_date !== null || (existing.vote_options ?? []).join() !== values.vote_options.join();
-	// (A custom deadline is checked when the form is read.)
-	if (values.date_mode === 'vote' && optionsChanged && !values.vote_deadline) {
-		const today = new Date().toISOString().slice(0, 10);
-		const first = values.vote_options[0];
-		if (lastVotingDay(first) < today) {
-			return {
-				field: 'vote_options',
-				error: `Voting would already be closed: voting closes 3 weeks before the earliest day, and ${dayLabel(first, 'long')} is less than that away. Untick the earliest days or pick a fixed date.`
-			};
-		}
+	// Voting can't open in the past. (Only checked when the opening day changes;
+	// leaving an already-open vote alone is fine.)
+	const opensChanged = !existing || existing.walk_date !== null || existing.vote_opens !== values.vote_opens;
+	if (values.date_mode === 'vote' && opensChanged && values.vote_opens < new Date().toISOString().slice(0, 10)) {
+		return { field: 'vote_opens', error: 'Voting can’t open in the past. Pick today or a later day.' };
 	}
 
 	let derived;
@@ -130,7 +116,7 @@ export async function saveWalk(
 			walk_date: values.date_mode === 'fixed' ? values.walk_date : null,
 			start_time: values.start_time,
 			vote_options: values.vote_options,
-			vote_deadline: values.vote_deadline || null
+			vote_opens: values.date_mode === 'vote' ? values.vote_opens : null
 		});
 	} catch (e) {
 		if (e instanceof UserError) return { field: 'vote_options', error: e.message };
@@ -168,7 +154,7 @@ export async function saveWalk(
 		cancelled: values.cancelled,
 		route_image_id: imageId,
 		walk_date: values.date_mode === 'fixed' ? values.walk_date : null,
-		vote_deadline: values.date_mode === 'fixed' ? null : values.vote_deadline || null,
+		vote_deadline: null,
 		...derived
 	};
 

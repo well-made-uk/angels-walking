@@ -1,9 +1,9 @@
 // Appwrite Function, run every 30 minutes (cron */30 * * * *). Emails the organisers
 // when a date vote opens and when it closes, with a ready-to-paste note for the group.
 //
-// A vote opens 5 weeks before the earliest day on offer and closes 3 weeks before it
-// (see src/lib/walks.ts in the site). The opening time isn't stored, so it is worked
-// out here the same way. Once voting closes, the site locks the walk the next time
+// A vote runs for one week from the day the organiser chose for it to open (stored on
+// the walk as vote_opens, suggested as 6 weeks before the earliest day on offer; see
+// src/lib/walks.ts in the site). Walks made before that was stored fall back to 6 weeks. Once voting closes, the site locks the walk the next time
 // anyone opens it, which clears the vote's options and closing time. So while a vote is
 // running this function keeps a small "watch" row in the settings table with its closing
 // time, and uses that to know when to send the closing email even if the walk has
@@ -19,7 +19,7 @@ import { addDays, londonToUtc } from './time.js';
 const env = (k, d = '') => process.env[k] ?? d;
 const DATABASE = env('AW_DATABASE_ID', 'angels_walking');
 const ORGANISER_LABEL = 'angelsOrganiser';
-const OPEN_DAYS = 35;
+const OPEN_DAYS = 42; // only for walks without a stored vote_opens
 const DAY = 24 * 60 * 60 * 1000;
 const CATCH_UP = 7 * DAY; // never email about something older than this
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -124,7 +124,7 @@ async function run(opt, log) {
 		const voting = !w.walk_date && options.length > 0 && !!w.votes_close_at;
 
 		if (voting) {
-			const opensAt = londonToUtc(addDays(options[0], -OPEN_DAYS));
+			const opensAt = londonToUtc(w.vote_opens || addDays(options[0], -OPEN_DAYS));
 			const closesAt = new Date(w.votes_close_at);
 			if (!dryRun && !opt.sample) await setMarker(w.$id, 'watch', closesAt.toISOString());
 

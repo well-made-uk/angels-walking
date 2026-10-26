@@ -4,16 +4,16 @@
 	import { dayLabel, monthLabel } from '$lib/format';
 	import type { WalkFormErrors, WalkFormValues } from '$lib/types';
 	import {
-		addDays,
 		daysBetween,
 		defaultVoteDays,
 		isWeekend,
-		firstVotingDay,
 		iso,
 		lastVotingDay,
+		latestVoteOpen,
 		MAX_RANGE_DAYS,
 		monthEnd,
-		parseDay
+		parseDay,
+		suggestedVoteOpen
 	} from '$lib/walks';
 
 	interface Props {
@@ -33,21 +33,25 @@
 	let rangeStart = $derived(values.range_start);
 	let rangeEnd = $derived(values.range_end);
 	let picked = $derived([...values.vote_options]);
-	let customDeadline = $derived(!!values.vote_deadline);
-	let deadline = $derived(values.vote_deadline);
+	// The day voting opens: suggested from the earliest day, and left alone once the
+	// organiser has chosen their own (or when editing a walk that already has one).
+	let opens = $derived(values.vote_opens);
+	let opensEdited = $derived(!!values.vote_opens);
 
 	const rangeOk = $derived(
 		!!rangeStart && !!rangeEnd && rangeEnd >= rangeStart && daysBetween(rangeStart, rangeEnd).length <= MAX_RANGE_DAYS
 	);
 	const sortedPicks = $derived([...picked].sort());
 	const today = iso(new Date());
-	const autoDeadline = $derived(sortedPicks.length ? lastVotingDay(sortedPicks[0]) : '');
-	const autoPassed = $derived(!!autoDeadline && autoDeadline < today);
-	// Voting opens 5 weeks before the earliest day and closes 3 weeks before it; your own
-	// deadline can only be earlier than that, and not before voting opens.
-	const opensDay = $derived(sortedPicks.length ? firstVotingDay(sortedPicks[0]) : '');
-	const latestDeadline = $derived(autoDeadline);
-	const earliestDeadline = $derived(opensDay > today ? opensDay : today);
+	const firstDay = $derived(sortedPicks[0] ?? '');
+	const latestOpen = $derived(firstDay ? latestVoteOpen(firstDay) : '');
+	const earliestOpen = today;
+	// Not enough time before the earliest day for a week of voting.
+	const tooLate = $derived(!!firstDay && latestOpen < today);
+
+	$effect(() => {
+		if (!opensEdited && firstDay) opens = suggestedVoteOpen(firstDay);
+	});
 
 	// Whole months covering the range, as weeks (Monday first) of days.
 	const calendar = $derived.by(() => {
@@ -68,14 +72,6 @@
 		}
 		return months;
 	});
-
-	// Suggest a deadline when the organiser opts in: the usual one if it's
-	// still ahead, otherwise a week from today (or the latest allowed day).
-	function onCustomDeadline() {
-		if (!customDeadline || deadline) return;
-		const inAWeek = addDays(today, 7);
-		deadline = !autoPassed ? autoDeadline : inAWeek <= latestDeadline ? inAWeek : latestDeadline;
-	}
 
 	function resetDays() {
 		picked = rangeOk ? defaultVoteDays(rangeStart, rangeEnd) : [];
@@ -308,46 +304,39 @@
 
 				{#if sortedPicks.length}
 					<div class="field deadline">
-						<span class="label">Voting deadline</span>
+						<span class="label">When voting runs</span>
 						<p class="hint summary">
 							<strong>{sortedPicks.length} day{sortedPicks.length === 1 ? '' : 's'}</strong> on the vote.
-							{#if customDeadline && deadline}
-								Voting closes at the end of <strong>{dayLabel(deadline, 'long')}</strong>, then the most popular day
-								is locked in.
-							{:else if autoPassed}
-								Voting closes 3 weeks before the earliest day, which was
-								<strong>{dayLabel(autoDeadline, 'long')}</strong>, so there's no time left for a vote. Untick the
+							{#if tooLate}
+								Voting runs for a week and has to finish before the earliest day, which was
+								<strong>{dayLabel(firstDay, 'long')}</strong>, so there's no time left for a vote. Untick the
 								earliest days, or choose a fixed date instead.
 							{:else}
-								Voting opens on <strong>{dayLabel(opensDay, 'long')}</strong> (5 weeks before the earliest day) and
-								closes at the end of <strong>{dayLabel(autoDeadline, 'long')}</strong> (3 weeks before), then the
-								most popular day is locked in.
+								Voting lasts one week, so people don't make other plans while it's open. We suggest opening it 6
+								weeks before the earliest day; change it if you like. Then the most popular day is locked in.
 							{/if}
 						</p>
-						{#if !autoPassed}
-							<label class="check">
-								<input type="checkbox" name="custom_deadline" bind:checked={customDeadline} onchange={onCustomDeadline} />
-								Choose an earlier deadline
-							</label>
-						{/if}
-						{#if customDeadline && !autoPassed}
+						{#if !tooLate}
 							<label class="inline deadline-date">
-								Last day to vote
+								Voting opens on
 								<input
 									type="date"
-									name="vote_deadline"
-									bind:value={deadline}
-									min={earliestDeadline}
-									max={latestDeadline}
+									name="vote_opens"
+									bind:value={opens}
+									oninput={() => (opensEdited = true)}
+									min={earliestOpen}
+									max={latestOpen}
 									required
 								/>
 							</label>
-							<p class="hint">
-								Any day from {dayLabel(earliestDeadline, 'long')} up to {dayLabel(latestDeadline, 'long')}. Voting
-								closes at midnight.
-							</p>
+							{#if opens && opens >= earliestOpen && opens <= latestOpen}
+								<p class="hint">
+									Voting opens on <strong>{dayLabel(opens, 'long')}</strong> and closes at the end of
+									<strong>{dayLabel(lastVotingDay(opens), 'long')}</strong>.
+								</p>
+							{/if}
 						{/if}
-						{#if errors.vote_deadline}<p class="field-error">{errors.vote_deadline}</p>{/if}
+						{#if errors.vote_opens}<p class="field-error">{errors.vote_opens}</p>{/if}
 					</div>
 				{/if}
 			{/if}
