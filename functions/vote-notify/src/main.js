@@ -189,9 +189,20 @@ async function run(opt, log) {
 	return { now: now.toISOString(), dryRun, organisers: to.length, planned: summary };
 }
 
+// Scheduled runs have no body at all, and reading req.bodyJson then throws, so only
+// hand-made test runs (see the top of this file) carry options.
+function options(req) {
+	try {
+		const body = req.bodyText ? JSON.parse(req.bodyText) : {};
+		return body && typeof body === 'object' ? body : {};
+	} catch {
+		return {};
+	}
+}
+
 export default async ({ req, res, log, error }) => {
 	apiKey = req.headers['x-appwrite-key'] || env('AW_API_KEY');
-	const opt = req.bodyJson && typeof req.bodyJson === 'object' ? req.bodyJson : {};
+	const opt = options(req);
 	try {
 		return res.json(await run(opt, log));
 	} catch (err) {
