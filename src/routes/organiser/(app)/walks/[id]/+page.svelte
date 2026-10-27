@@ -27,6 +27,7 @@
 
 <p class="crumb"><a href="/organiser">← Walks</a></p>
 <h1>{walk.title}</h1>
+<p class="share"><a class="btn btn-ghost small" href="/organiser/walks/{walk.id}/image">Make a share image</a></p>
 
 {#if created}
 	<p class="notice" role="status">Walk created — it’s now on the public page.</p>
@@ -120,6 +121,10 @@
 </section>
 
 <style>
+	.share {
+		margin: 0.25rem 0 1rem;
+	}
+
 	.crumb {
 		margin: 0 0 0.5rem;
 	}

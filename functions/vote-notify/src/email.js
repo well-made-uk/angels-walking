@@ -57,6 +57,11 @@ const label = (t) =>
 const button = (href, text) =>
 	`<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 0"><tr><td style="border-radius:8px;background:${C.accent}"><a href="${esc(href)}" style="display:inline-block;padding:11px 20px;border-radius:8px;background:${C.accent};color:#ffffff;font:600 15px/20px ${FONT};text-decoration:none">${esc(text)}</a></td></tr></table>`;
 
+/** A quiet link to the page that makes the walk's share image (organisers sign in there). */
+const imageLink = (site, walk) =>
+	`<div style="margin:14px 0 0;font:14px/1.5 ${FONT};color:${C.muted}">Want a picture for the chat? <a href="${esc(imageUrl(site, walk))}" style="color:${C.accent};font-weight:600">Make a share image</a></div>`;
+const imageUrl = (site, walk) => `${site}/organiser/walks/${walk.$id}/image`;
+
 /** The ready-to-paste note for the group chat. */
 const groupNote = (text) =>
 	`<div style="background:${C.accentSoft};border-radius:10px;padding:14px 16px;font:15px/1.55 ${FONT};color:${C.ink};white-space:pre-wrap">${esc(text)}</div>
@@ -92,9 +97,10 @@ export function renderOpen({ walk, site, passcode = '', test = false }) {
 		body:
 			card(`${label('Days on offer')}${chips}<div style="margin-top:6px;color:${C.muted};font-size:14px">Voting closes at the end of <strong style="color:${C.ink}">${esc(closes)}</strong>.</div>`) +
 			card(`${label('Message for the group')}${groupNote(note)}`, C.trail) +
-			button(site, 'Open the site')
+			button(site, 'Open the site') +
+			imageLink(site, walk)
 	});
-	const text = `Voting is open for ${walk.title}\n\nDays on offer: ${days.map(dayShort).join(', ')}\nVoting closes at the end of ${closes}.\n\nMessage for the group:\n${note}\n\n${site}`;
+	const text = `Voting is open for ${walk.title}\n\nDays on offer: ${days.map(dayShort).join(', ')}\nVoting closes at the end of ${closes}.\n\nMessage for the group:\n${note}\n\n${site}\n\nShare image for the chat: ${imageUrl(site, walk)}`;
 	return { subject: `${test ? '[Test] ' : ''}Voting is open: ${walk.title}`, html, text };
 }
 
@@ -125,8 +131,9 @@ export function renderClose({ walk, result, site, test = false }) {
 			) +
 			card(`${label('Message for the group')}${groupNote(note)}`, C.trail) +
 			button(site, 'Open the site') +
+			imageLink(site, walk) +
 			`<div style="margin:14px 0 0;font:13px/1.5 ${FONT};color:${C.muted}">The walk shows this date as soon as anyone next opens the site.</div>`
 	});
-	const text = `Voting has closed for ${walk.title}\n\nThe day: ${dayLong(result.day)}\n${summary}\n\nMessage for the group:\n${note}\n\n${site}`;
+	const text = `Voting has closed for ${walk.title}\n\nThe day: ${dayLong(result.day)}\n${summary}\n\nMessage for the group:\n${note}\n\n${site}\n\nShare image for the chat: ${imageUrl(site, walk)}`;
 	return { subject: `${test ? '[Test] ' : ''}Voting closed: ${walk.title} is on ${dayShort(result.day)}`, html, text };
 }

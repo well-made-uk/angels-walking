@@ -147,6 +147,16 @@ scheduled job is needed. To change the suggested opening
 `functions/vote-notify/src/main.js`, used only for walks made before the opening
 day was stored). The chosen opening day is stored on the walk as `vote_opens`.
 
+**Share image:** each walk's organiser page has a "Make a share image" button
+(and the vote opened/closed emails link to the same page, which needs your
+organiser sign-in). It draws the walk's name over five map-and-trail pictures
+(contours, a night map, a grid map, an elevation profile, and parks and a river).
+Pictures are drawn in the browser from a random seed, so "Again" gives new hills
+and routes; "Save PNG" downloads a 1080 x 1080 square and "Copy" puts it on the
+clipboard for pasting into the chat. The drawing code is `src/lib/walk-image.ts`.
+The lettering uses a condensed font that comes with the device (Avenir Next
+Condensed on Apple devices), so it looks a little different elsewhere.
+
 **Cancelling:** tick "This walk is cancelled" when editing. It stays on the page,
 marked as cancelled. "Delete this walk" removes it completely, along with its
 sign-ups and votes.
